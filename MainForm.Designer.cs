@@ -1,15 +1,16 @@
-﻿/*
- * Created by SharpDevelop.
- * User: skorik
- * Date: 29.06.2016
- * Time: 16:05
- * 
- * To change this template use Tools | Options | Coding | Edit Standard Headers.
- */
+﻿using System.Net;
+using System;
+using System.Web;
+using System.IO;
+using System.Collections.Generic;
+using System.Text;
+using System.Windows.Forms;
 namespace wpad
 {
 	partial class MainForm
 	{
+		HttpListener HTTPserver;
+		bool flag = true;
 		/// <summary>
 		/// Designer variable used to keep track of non-visual components.
 		/// </summary>
@@ -64,6 +65,111 @@ namespace wpad
 		void MainFormLoad(object sender, System.EventArgs e)
 		{
 			listBox1.Items.Add("Start");
+			listBox1.Items.Add("Start HTTP Server");
+			string uri = @"http://10.80.4.220/wpad/";
+        	StartServer(uri);
 		}
+        private void StartServer(string prefix)
+	    {
+	        HTTPserver = new HttpListener();
+	
+	        // текущая ос не поддерживается
+	        if (!HttpListener.IsSupported) return;
+	
+	        //добавление префикса (say/)
+	        //обязательно в конце должна быть косая черта
+	        if (string.IsNullOrEmpty(prefix))
+	           throw new ArgumentException("prefix");
+	   
+	        HTTPserver.Prefixes.Add(prefix);
+	
+	        //запускаем север
+	        HTTPserver.Start();  
+	 
+	        this.Text = "Сервер запущен!";
+	
+	        //сервер запущен? Тогда слушаем входящие соединения
+	        while (HTTPserver.IsListening)
+	        {
+	           //ожидаем входящие запросы
+	           HttpListenerContext context = HTTPserver.GetContext();
+	
+	            //получаем входящий запрос
+	            HttpListenerRequest request = context.Request;
+	
+	            //обрабатываем POST запрос
+	
+	            //запрос получен методом POST (пришли данные формы)
+	            if (request.HttpMethod == "POST")
+	            {
+	                //показать, что пришло от клиента
+	                ShowRequestData(request);
+	
+	                //завершаем работу сервера
+	                if (!flag) return;
+	            }
+	 
+	            //формируем ответ сервера:
+	
+	            //динамически создаём страницу
+	            string responseString = @"<!DOCTYPE HTML>
+	                    <html><head></head><body>
+	                    <form method=""post"" action=""say"">
+	                    <p><b>Name: </b><br>
+	                    <input type=""text"" name=""myname"" size=""40""></p>
+	                    <p><input type=""submit"" value=""send""></p>
+	                    </form></body></html>";
+	
+	            //отправка данных клиенту
+	            HttpListenerResponse response = context.Response;
+	            response.ContentType = "text/html; charset=UTF-8";
+	            byte[] buffer = Encoding.UTF8.GetBytes(responseString);
+	            response.ContentLength64 = buffer.Length;
+	
+	            using (Stream output = response.OutputStream)
+	            {
+	                output.Write(buffer, 0, buffer.Length);
+	            }
+	        }
+	   } 
+        
+        
+        //http://csharpprogramming.ru/web/kak-sozdat-veb-server-s-pomoshhyu-klassa-httplistener
+        //https://habrahabr.ru/post/120157/
+		private void ShowRequestData(HttpListenerRequest request)
+	    {
+	        //есть данные от клиента?
+	        if (!request.HasEntityBody) return;
+			
+	        //смотрим, что пришло
+	        using (Stream body = request.InputStream)
+	        {
+	            using (StreamReader reader = new StreamReader(body))
+	            {
+	               string text = reader.ReadToEnd();
+	                
+	               //оставляем только имя
+	               text = text.Remove(0, 7);
+	
+	               //преобразуем %CC%E0%EA%F1 -> Макс
+	               //text = System.Web.HttpUtility.UrlDecode(text, Encoding.UTF8);
+						              
+	               
+	               //выводим имя
+	               MessageBox.Show("Ваше имя: " + text);
+	
+	              flag = true;
+	
+	                //останавливаем сервер
+	                if (text == "stop")
+	                {
+	                   HTTPserver.Stop();
+	                   this.Text = "Сервер остановлен!";
+	                   flag = false;
+	                }
+	             }
+	          }
+	       }
+	   }        
 	}
-}
+
